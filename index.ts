@@ -5,33 +5,32 @@ import { calc, vector } from '@js-basics/vector';
 const appDiv = document.querySelector('#app');
 const personDiv: HTMLElement = document.querySelector('.person');
 
-let currentPosition = vector(0, 0);
+const clickSeries: HTMLElement[] = [];
 
-const clickSeries = [];
-
-const onClickHandler = async (ev: Event) => {
+const onClickHandler = async (ev: Event): Promise<void> => {
   const target = ev.target as HTMLElement;
   clickSeries.push(target);
-  for (let i = 0; i < clickSeries.length; i++) {
-    await applyAnimation(clickSeries[i]);
-  }
+  !animationInProgress && (await applyAnimation());
 };
 
-const applyAnimation = async (target: HTMLElement) => {
+const applyAnimation = async (): Promise<void> => {
+  const target = clickSeries.shift();
   if (target?.classList.contains('dot')) {
     finalPosition = vector(JSON.parse(target.dataset.vec));
     target?.classList.toggle('dot-active');
     await animationProcedure({ draw, timing });
     startPosition = finalPosition;
     target?.classList.toggle('dot-active');
-    clickSeries.shift();
+    if (clickSeries.length > 0) {
+      await applyAnimation();
+    }
   }
 };
 
 appDiv.addEventListener('click', onClickHandler);
 
-function makeEaseInOut(timing) {
-  return function (timeFraction) {
+function makeEaseInOut(timing: (number) => number): (number) => number {
+  return function (timeFraction: number) {
     if (timeFraction < 0.5) return timing(2 * timeFraction) / 2;
     else return (2 - timing(2 * (1 - timeFraction))) / 2;
   };
@@ -45,12 +44,12 @@ const checkpoints = [
   vector(320, 225),
   vector(320, 45),
   vector(10, 10),
-];
+] as Vector[];
 
-checkpoints.forEach((point, i) => {
-  const p = document.createElement('div');
+checkpoints.forEach((point: Vector, index) => {
+  const p: HTMLDivElement = document.createElement('div');
   p.className = 'dot';
-  p.id = '#dot' + (i + 1);
+  p.id = '#dot' + (index + 1);
   p.style.transform = `translate(${point.x}px, ${point.y}px)`;
   p.dataset.vec = point;
   appDiv.appendChild(p);
@@ -67,9 +66,9 @@ export type Vector = ReturnType<typeof vector>;
 
 const lerp = (a: Vector, b: Vector, t: number) => calc(() => a + (b - a) * t);
 
-let [startPosition, finalPosition] = checkpoints;
+let [startPosition, finalPosition] = checkpoints as Vector[];
 
-const timing = (delta) => {
+const timing = (delta: number) => {
   for (let a = 0, b = 1; 1; a += b, b /= 2) {
     if (delta >= (7 - 4 * a) / 11) {
       return -Math.pow((11 - 6 * a - 11 * delta) / 4, 2) + Math.pow(b, 2);
@@ -86,16 +85,19 @@ const draw = (progress) => {
 };
 
 const colors = [];
+let animationInProgress = false;
 
 const animationProcedure = ({ timing, draw, duration = 2000 }) => {
   return new Promise((resolve: any) => {
     let start = performance.now();
+    animationInProgress = true;
 
     window.requestAnimationFrame(function animate(dt) {
       let timeFraction = (dt - start) / duration;
 
       if (timeFraction > 1) {
         timeFraction = 1;
+        animationInProgress = false;
         return resolve();
       }
 
